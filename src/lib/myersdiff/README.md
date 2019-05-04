@@ -1,6 +1,6 @@
-#一个$O(ND)$的差分算法及其变体
+# 一个$O(ND)$的差分算法及其变体
 
-#### 作者：	`EUGENE W. MYERS`
+#### 作者：	EUGENE W. MYERS
 
 ## 摘要
 　　求两个序列$$A$$、$$B$$的最长公共子序列，和把$$A$$转换成$$B$$的最短编辑脚本一直被认为是双重问题。在本文中，它们被证明等价于在编辑图中找到最长或最短的路径。通过透视图，一个简单的$$O(ND)$$的时间和空间算法被开发出来，其中$$N$$是$$A$$、$$B$$长度之和，$$D$$是最小编辑脚本的长度。当两个序列差异较小(序列相似)时，该算法性能很好，因此在典型应用中具有较快的速度。在基本随机模型下，该算法显示出$$O(N+D^2)$$的期待时间性能。一种改进算法只要求$$O(N)$$的空间，使用后缀树产生一个$$O(NlgN+D^2)$$时间的变体。
@@ -154,3 +154,89 @@ $$
 
 (上面证明了引理2命题中的前者是后者的必要条件，如果有一条从(0,0)到某点(x,y)的$\lceil D/2\rceil$-路径，并且有一条从某点(u,v)到(N,M)的$\lfloor D/2\rfloor$-路径，那么从(0,0)到(N,M)存在一条D-路径。其中的约束条件略去未写。)
 
+下面的大纲给出了一个寻找最优路径的中间蛇程序。对连续的D值，计算距离(0,0)最远到达的正向D-路径的终点，并且计算距离(N,M)最远到达的反向D-路径的终点。在V向量中像基础算法那样做，每个方向一个V向量。对每个计算出的终点。检查它是否在相同对角线的相反方向路径重叠。需要检查以确保在给定的对角线上有一个相反的路径，因为正向路径是以0为中心的对角线，而反向路径是以$\Delta=N−M$为中心的对角线。此外，根据引理1，编辑脚本的长度和$\Delta$具有相同的奇偶性。因此当$\Delta$是奇数时，只在扩展正向路径时检查是否重叠，当$\Delta$是偶数时，只在扩展反向路径时检查是否重叠。一旦一对反向的和最远到达的路径重叠，停止并报告重叠的蛇作为一条最优路径的中间蛇。请注意，这条蛇的端点可以很容易地交付，因为蛇刚刚在上一步被计算出来。
+
+```
+∆ ← N−M
+For D ← 0 to 2 (M + N)/23 Do
+	For k ← −D to D in steps of 2 Do
+		Find the end of the furthest reaching forward D-path in diagonal k.
+		If ∆ is odd and k ∈ [∆ − (D − 1) ,∆ + (D − 1)] Then
+			If the path overlaps the furthest reaching reverse (D − 1)-path in diagonal k Then
+				Length of an SES is 2D−1.
+				The last snake of the forward path is the middle snake.
+	For k ← −D to D in steps of 2 Do
+		Find the end of the furthest reaching reverse D-path in diagonal k+∆.
+			If ∆ is even and k + ∆ ∈ [ − D,D] Then
+				If the path overlaps the furthest reaching forward D-path in diagonal k+∆ Then
+					Length of an SES is 2D.
+					The last snake of the reverse path is the middle snake.
+```
+
+这个程序的正确性重度依赖于引理3，不失一般性地假设$\Delta$是偶数，当一遇到最远到达的D-路径在相反方向重叠的最小的D，算法就会停止。首先，重叠路径肯定满足引理3的feasibility约束。假设最远到达的路径结束在(u,v),u+v=k。总是可以连接从(0,0)到(u,v)的非对角线的k-路径和反向的D-路径组成一条从(0,0)到(N,M)的(k+D)-路径。这条路径和引理3表明这里有一条重叠的h-路径。其中$h=(k+D)/2$(k+D是可以被2整除的，因为$\Delta$是偶数)。所以无疑这里有一条重叠的最远到达的h-or-less-路径。如果k<D，则h<D与最远到达的D-路径是第一个重叠的事实相矛盾。因此$u+v \geq D$。一个类似的论证表明，最远的到达前向D-路径也满足引理3的feasibility约束。现在可行性，重叠的D-路径和引理3意味着有一个长度为2D的路径的解。如果存在2k-路径，k<D，这一定是最优的，那么引理意味着有k-路重叠。但是这意味着有重叠的最远到达的k-or-less-路径，与没有比D小的重叠的路径的事实相矛盾。通过引理3，所有的重叠路径都是从(0,0)到(N,M)的最优的2D-路径的一部分。当$\Delta$是奇数时，可以得出相同的结论。选择的蛇是最优路径一部分的中间蛇仍有待证明。当$\Delta$是奇数（偶数）时，这条蛇是正向（反向）路径的第D+1次，最优路径2D-1(2D)-路径一部分。
+
+寻找最优D-路径的中间蛇程序的两个V向量需要总计O(D)的工作存储空间。程序只要求O((M+N)D)时间，因为正向和反向路径的扩展都是用消耗O((M+N)D)时间的使用相同参数的基本算法。事实上，在扩展正向和反向路径时遍历的蛇的数量只是基础算法的一半，因为只搜索了D/2条对角线。这个特性是实用的--实验表明，当D=0时，这种确定SES长度的方法与基本算法一样高效，而且随着D的增长，速度迅速增长为它的两倍。
+
+给定一个中间蛇程序，通过编辑图，一个寻找大小分别为N和M的A和B序列的一条最优路径的线性空间算法可以被设计出来。为了简单，下面的分治算法只是列出了A和B的最长公共子序列。(生成最短编辑脚本保留为练习。)，首先，划分问题为寻找最优路径的从(x,y)到(u,v)的中间蛇。通过递归地寻找一条从(0,0)到(x,y)的$\lceil D/2\rceil$-路径，并且列出它们的LCS，来解决问题。然后列出中间蛇("Output A[x..u]",如果u<x,则没有输出)。最后，递归地寻找从(u,v)到(N,M)的$\lfloor D/2\rfloor$-路径并列出它们的LCS。递归以两种方式结束。如果N=0或者M=0，则L=0并且没有什么可列出的。在其它情况下，N>0并且M>0并且$D\leq 1$。如果$D\leq 1$，则B是通过删除或插入最多一个符号从A获得的。但是它遵循了A与B中较短的是LCS，并且应该被列出。
+
+```
+LCS(A,N,B,M)
+	If N>0 and M>0 Then
+		Find the middle snake and length of an optimal path for A and B.
+		Suppose it is from (x,y) to (u,v).
+		If D > 1 Then
+			LCS(A[1..x],x,B[1..y],y)
+			Output A[x+1..u].
+			LCS(A[u+1..N],N−u,B[v+1..M],M−v)
+		Else If M > N Then
+			Output A[1..N].
+		Else
+			Output B[1..M].
+```
+
+后略。
+
+### 4c.一个$O( (M + N) lg(M + N) + D^2)$最坏情况的变体
+
+略。
+
+##致谢
+
+Webb Miller 最先提出了寻找O(ND)算法的问题。作者想要感谢他助力这项工作和他的许多有帮助的建议。审阅人的评论和更正使本文变得更好。
+
+## 参考文献
+
+1. Aho, A.V., Hirschberg, D.S., and Ullman, J.D. ‘‘Bounds on the Complexity of the Longest Common Subsequence Problem.’’ Journal of ACM 23, 1 (1976), 1-12.
+2. Aho, A.V., Hopcroft, J.E., and Ullman, J.D. Data Structures and Algorithms. Addison-Wesley, Reading,
+Mass. (1983), 203-208.
+3. Dijkstra, E.W. ‘‘A Note on Two Problems in Connexion with Graphs.’’ Numerische Mathematik 1 (1959),
+269-271.
+4. Gosling, J. ‘‘A Redisplay Algorithm.’’ Proceedings ACM SIGPLAN/SIGOA Symposium on Text Manipulation (1981), 123-129.
+5. Hall, P.A.V. and Dowling, G.R. ‘‘Approximate String Matching.’’ Computing Surveys 12, 4 (1980), 381-402.
+6. Harel, D. and Tarjan, R.E. ‘‘Fast Algorithms for Finding Nearest Common Ancestors.’’ SIAM Journal on
+Computing 13, 2 (1984), 338-355.
+7. Hirschberg, D.S. ‘‘A Linear Space Algorithm for Computing Maximal Common Subsequences.’’ Communications of ACM 18, 6 (1975), 341-343.
+8. Hirschberg, D.S. ‘‘Algorithms for the Longest Common Subsequence Problem.’’ Journal of ACM 24, 4
+(1977), 664-675.
+9. Hirschberg, D.S. ‘‘An Information-Theoretic Lower Bound for the Longest Common Subsequence Problem.’’
+Information Processing Letters 7, 1 (1978), 40-41.
+10. Hunt, J.W. and McIlroy, M.D. ‘‘An Algorithm for Differential File Comparison.’’ Computing Science Technical Report 41, Bell Laboratories (1975).
+11. Hunt, J.W. and Szymanski, T.G. ‘‘A Fast Algorithm for Computing Longest Common Subsequences.’’ Communications of ACM 20, 5 (1977), 350-353.
+12. Knuth, D.E. The Art of Computer Programming, Vol. 3: Sorting and Searching. Addison-Wesley, Reading,
+Mass. (1983), 490-493.
+13. Masek, W.J. and Paterson, M.S. ‘‘A Faster Algorithm for Computing String Edit Distances.’’ J. of Computer
+and Systems Sciences 20, 1 (1980), 18-31.
+14. McCreight, E.M. ‘‘A Space-Economical Suffix Tree Construction Algorithm.’’ Journal of ACM 23, 2 (1976),
+262-272.
+15. Miller, W., and Myers, E.W. ‘‘A File Comparison Program.’’ Software — Practice & Experience 15, 11
+(1985), 1025-1040.
+16. Nakatsu, N., Kambayashi, Y., and Yajima, S. ‘‘A Longest Common Subsequence Algorithm Suitable for
+Similar Text Strings.’’ Acta Informatica 18 (1982), 171-179.
+17. Rochkind, M.J. ‘‘The Source Code Control System.’’ IEEE Transactions on Software Engineering 1, 4
+(1975), 364-370.
+18. Sankoff, D. and Kruskal, J.B. Time Warps, String Edits and Macromolecules: The Theory and Practice of
+Sequence Comparison. Addison-Wesley, Reading, Mass. (1983).
+19. Tichy, W. ‘‘The String-to-String Correction Problem with Block Moves.’’ ACM Transactions on Computer
+Systems 2, 4 (1984), 309-321.
+20. Wagner, R.A. and Fischer, M.J. ‘‘The String-to-String Correction Problem.’’ Journal of ACM 21, 1 (1974),
+168-173.
