@@ -246,7 +246,7 @@ iter_dif_t<BIter> shortestEditScript(BIter first1,
                                      const iter_dif_t<BIter> M,
                                      ses_t<BIter>& ses) {
   return shortestEditScript(
-      first1, srcOffset, N, first2, dstOffset, ses,
+      first1, srcOffset, N, first2, dstOffset, M, ses,
       std::equal_to<typename std::iterator_traits<BIter>::value_type>());
 }
 }  // namespace mydiff
