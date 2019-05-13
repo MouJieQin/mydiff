@@ -8,29 +8,37 @@
 
 namespace mydiff {
 
+enum EDIT_SCRIPT { ES_DELETE, ES_INSERT };
+
 template <typename Iter>
 using iter_dif_t = typename std::iterator_traits<Iter>::difference_type;
-
-enum EDIT_SCRIPT { ES_RETAIN, ES_DELETE, ES_INSERT };
 
 template <typename BIter>
 using ses_t = std::vector<std::pair<EDIT_SCRIPT, iter_dif_t<BIter>>>;
 
-template <typename BIter,
-          typename Compare =
-              std::equal_to<typename std::iterator_traits<BIter>::value_type>>
+template <typename BIter, typename EqualTo>
+iter_dif_t<BIter> shortestEditScript(BIter first1,
+                                     const iter_dif_t<BIter> srcOffset,
+                                     const iter_dif_t<BIter> N, BIter first2,
+                                     const iter_dif_t<BIter> dstOffset,
+                                     const iter_dif_t<BIter> M,
+                                     ses_t<BIter>& ses, const EqualTo& equalTo);
+
+template <typename BIter, typename EqualTo>
 class MyersDiff {
- public:
+  friend iter_dif_t<BIter> shortestEditScript<BIter, EqualTo>(
+      BIter first1, const iter_dif_t<BIter> srcOffset,
+      const iter_dif_t<BIter> N, BIter first2,
+      const iter_dif_t<BIter> dstOffset, const iter_dif_t<BIter> M,
+      ses_t<BIter>& ses, const EqualTo& equalTo);
+
+ private:
   typedef typename std::iterator_traits<BIter>::value_type value_type;
   typedef typename std::iterator_traits<BIter>::difference_type difference_type;
   typedef difference_type diff_t;
   typedef std::pair<diff_t, diff_t> point_t;
   typedef ses_t<BIter> ses_t;
 
- public:
-  MyersDiff(const diff_t maxPath) : forward(maxPath), reverse(maxPath){};
-
- private:
   class IntIndexVector {
    public:
     IntIndexVector(const diff_t maxPath)
@@ -47,94 +55,73 @@ class MyersDiff {
     std::vector<diff_t> vec_;
   };
 
-  diff_t absIndex(const diff_t offset, const diff_t index) {
-    return offset + (index - 1);
-  }
-
- public:
-  diff_t shortestEditScript(BIter first1, BIter last1, BIter first2,
-                            BIter last2, ses_t& ses) {
-    return shortestEditScript(first1, 0, std::distance(first1, last1), first2,
-                              0, std::distance(first2, last2), ses);
-  }
-
+ private:
+  MyersDiff(const diff_t maxPath) : forward(maxPath), reverse(maxPath){};
   diff_t shortestEditScript(BIter first1, const diff_t srcOffset,
                             const diff_t N, BIter first2,
-                            const diff_t dstOffset, const diff_t M,
-                            ses_t& ses) {
+                            const diff_t dstOffset, const diff_t M, ses_t& ses,
+                            const EqualTo& equalTo) {
     ses_t tmpSes;
-    diff_t lcs = shortestEditScriptImple(first1, srcOffset, N, first2,
-                                         dstOffset, M, tmpSes);
+    shortestEditScriptImple(first1, srcOffset, N, first2, dstOffset, M, tmpSes,
+                            equalTo);
+    diff_t lcs = ((M + N) - tmpSes.size()) / 2;
     ses.swap(tmpSes);
     return lcs;
   }
 
  private:
-  diff_t shortestEditScriptImple(BIter src, const diff_t srcOffset,
-                                 const diff_t N, BIter dst,
-                                 const diff_t dstOffset, const diff_t M,
-                                 ses_t& ses) {
+  diff_t absIndex(const diff_t offset, const diff_t index) {
+    return offset + (index - 1);
+  }
+
+  void shortestEditScriptImple(BIter src, const diff_t srcOffset,
+                               const diff_t N, BIter dst,
+                               const diff_t dstOffset, const diff_t M,
+                               ses_t& ses, const EqualTo& equalTo) {
     if (M == 0 && N > 0) {
       for (diff_t i = 0; i < N; ++i) {
         ses.emplace_back(ES_DELETE, srcOffset + i);
       }
-      return 0;
+      return;
     }
     if (N == 0 && M > 0) {
       for (diff_t i = 0; i < M; ++i) {
         ses.emplace_back(ES_INSERT, dstOffset + i);
       }
-      return 0;
+      return;
     }
     if (N == 0 && M == 0) {
-      return 0;
+      return;
     }
     point_t head, tail;
-    diff_t d =
-        findMiddleSnake(src, srcOffset, N, dst, dstOffset, M, head, tail);
+    diff_t d = findMiddleSnake(src, srcOffset, N, dst, dstOffset, M, head, tail,
+                               equalTo);
     if (d == 0) {
-      for (diff_t i = head.first + 1; i <= tail.first; ++i) {
-        ses.emplace_back(ES_RETAIN, srcOffset + i - 1);
-      }
-      return tail.first - head.first;
     } else if (d == 1) {
       diff_t xForward = 0, yForward = 0;
       BIter xIter = std::next(src, srcOffset);
       BIter yIter = std::next(dst, dstOffset);
-      diff_t len = 0;
-      for (; xForward < N && yForward < M && equalTo(*(xIter++), *(yIter++));
-           ++len) {
+      for (; xForward < N && yForward < M && equalTo(*(xIter++), *(yIter++));) {
         xForward += 1;
         yForward += 1;
-        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, xForward));
       }
       if (xForward == head.first) {
         ses.emplace_back(ES_INSERT, absIndex(dstOffset, head.second));
       } else {
         ses.emplace_back(ES_DELETE, absIndex(srcOffset, head.first));
       }
-      for (diff_t i = head.first + 1; i <= tail.first; ++i) {
-        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
-      }
-      return len + tail.first - head.first;
     } else {
-      diff_t first = shortestEditScriptImple(src, srcOffset, head.first, dst,
-                                             dstOffset, head.second, ses);
-      for (diff_t i = head.first + 1; i <= tail.first; ++i) {
-        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
-      }
-      diff_t last = shortestEditScriptImple(
+      shortestEditScriptImple(src, srcOffset, head.first, dst, dstOffset,
+                              head.second, ses, equalTo);
+      shortestEditScriptImple(
           src, absIndex(srcOffset, tail.first + 1), N - tail.first, dst,
-          absIndex(dstOffset, tail.second + 1), M - tail.second, ses);
-      return first + last + tail.first - head.first;
+          absIndex(dstOffset, tail.second + 1), M - tail.second, ses, equalTo);
     }
-    return 0;
   }
 
- private:
   diff_t findMiddleSnake(BIter src, const diff_t srcOffset, const diff_t N,
                          BIter dst, const diff_t dstOffset, const diff_t M,
-                         point_t& head, point_t& tail) {
+                         point_t& head, point_t& tail, const EqualTo& equalTo) {
     diff_t last_x, last_y;
     diff_t x, y;
     diff_t kForward, kReverse;
@@ -154,8 +141,8 @@ class MyersDiff {
         y = x - k;
         last_x = x;
         last_y = y;
-        xIter = std::next(src, srcOffset + (x - 1));
-        yIter = std::next(dst, dstOffset + (y - 1));
+        xIter = std::next(src, absIndex(srcOffset, x));
+        yIter = std::next(dst, absIndex(dstOffset, y));
         for (; x < N && y < M && equalTo(*(++xIter), *(++yIter));) {
           x += 1;
           y += 1;
@@ -173,18 +160,14 @@ class MyersDiff {
       for (diff_t k = -d; k <= d; k += 2) {
         if (k == -d || (k != d && reverse[k - 1] < reverse[k + 1])) {
           x = reverse[k + 1];
-          last_x = x;
-          last_y = k + 1 - last_x;
         } else {
           x = reverse[k - 1] + 1;
-          last_x = reverse[k - 1];
-          last_y = k - 1 - last_x;
         }
         y = x - k;
         last_x = x;
         last_y = y;
-        xIter = std::next(src, srcOffset + ((N - x) - 1));
-        yIter = std::next(dst, dstOffset + ((M - y) - 1));
+        xIter = std::next(src, absIndex(srcOffset, (N - x)));
+        yIter = std::next(dst, absIndex(dstOffset, (M - y)));
         for (; x < N && y < M && equalTo(*(xIter--), *(yIter--));) {
           x += 1;
           y += 1;
@@ -206,13 +189,12 @@ class MyersDiff {
  private:
   IntIndexVector forward;
   IntIndexVector reverse;
-  Compare equalTo;
 };
 
-template <typename BIter, typename Compare>
+template <typename BIter, typename EqualTo>
 iter_dif_t<BIter> shortestEditScript(BIter first1, BIter last1, BIter first2,
                                      BIter last2, ses_t<BIter>& ses,
-                                     const Compare& comp) {
+                                     const EqualTo& comp) {
   return shortestEditScript(first1, 0, std::distance(first1, last1), first2, 0,
                             std::distance(first2, last2), ses, comp);
 }
@@ -225,17 +207,15 @@ iter_dif_t<BIter> shortestEditScript(BIter first1, BIter last1, BIter first2,
       std::equal_to<typename std::iterator_traits<BIter>::value_type>());
 }
 
-template <typename BIter, typename Compare>
-iter_dif_t<BIter> shortestEditScript(BIter first1,
-                                     const iter_dif_t<BIter> srcOffset,
-                                     const iter_dif_t<BIter> N, BIter first2,
-                                     const iter_dif_t<BIter> dstOffset,
-                                     const iter_dif_t<BIter> M,
-                                     ses_t<BIter>& ses, const Compare& comp) {
+template <typename BIter, typename EqualTo>
+iter_dif_t<BIter> shortestEditScript(
+    BIter first1, const iter_dif_t<BIter> srcOffset, const iter_dif_t<BIter> N,
+    BIter first2, const iter_dif_t<BIter> dstOffset, const iter_dif_t<BIter> M,
+    ses_t<BIter>& ses, const EqualTo& equalTo) {
   iter_dif_t<BIter> maxPath = (N + M + 1) / 2;
-  MyersDiff<BIter, Compare> mydiff(maxPath);
+  MyersDiff<BIter, EqualTo> mydiff(maxPath);
   return mydiff.shortestEditScript(first1, srcOffset, N, first2, dstOffset, M,
-                                   ses);
+                                   ses, equalTo);
 }
 
 template <typename BIter>

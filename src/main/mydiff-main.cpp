@@ -29,19 +29,26 @@ int main(int argc, char **argv) {
   if (!tv(dstf, dst)) {
     return 1;
   }
-  mydiff::MyersDiff<std::vector<std::string>::iterator>::ses_t ses;
+  mydiff::ses_t<std::vector<std::string>::iterator> ses;
   auto lcs =
       shortestEditScript(src.begin(), src.end(), dst.begin(), dst.end(), ses);
   std::cout << "LCS: " << lcs << std::endl;
   std::cout << "SES: " << ses.size() << std::endl;
+  int offset = 0;
   for (const auto &p : ses) {
-    if (p.first == mydiff::ES_RETAIN) {
-      std::cout << "  " << src[p.second] << std::endl;
-    } else if (p.first == mydiff::ES_DELETE) {
+    if (p.first == mydiff::ES_DELETE) {
+      for (; offset != p.second; ++offset) {
+        std::cout << "  " << src[offset] << std::endl;
+      }
       std::cout << "- " << src[p.second] << std::endl;
+      offset += 1;
     } else {
       std::cout << "+ " << dst[p.second] << std::endl;
+      offset += 1;
     }
+  }
+  for (; offset != src.size(); ++offset) {
+    std::cout << "  " << src[offset] << std::endl;
   }
   return 0;
 }
