@@ -6,7 +6,8 @@ INCLUDE_DIRECTORIES(${mydiff_ROOT_DIR}/src)
 
 project (mydiff)
 
-add_definitions(-std=c++11 -O0 -g -W -Wall)
+#add_definitions(-std=c++11 -O0 -g -W -Wall)
+add_definitions(-std=c++11 -O3 -W -Wall)
 
 #add_subdirectory(src/lib)
 

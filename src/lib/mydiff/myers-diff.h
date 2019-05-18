@@ -8,7 +8,7 @@
 
 namespace mydiff {
 
-enum EDIT_SCRIPT { ES_DELETE, ES_INSERT };
+enum EDIT_SCRIPT { ES_RETAIN, ES_DELETE, ES_INSERT };
 
 template <typename Iter>
 using iter_dif_t = typename std::iterator_traits<Iter>::difference_type;
@@ -57,6 +57,7 @@ class MyersDiff {
 
  private:
   MyersDiff(const diff_t maxPath) : forward(maxPath), reverse(maxPath){};
+
   diff_t shortestEditScript(BIter first1, const diff_t srcOffset,
                             const diff_t N, BIter first2,
                             const diff_t dstOffset, const diff_t M, ses_t& ses,
@@ -74,29 +75,33 @@ class MyersDiff {
     return offset + (index - 1);
   }
 
-  void shortestEditScriptImple(BIter src, const diff_t srcOffset,
-                               const diff_t N, BIter dst,
-                               const diff_t dstOffset, const diff_t M,
-                               ses_t& ses, const EqualTo& equalTo) {
+  diff_t shortestEditScriptImple(BIter src, const diff_t srcOffset,
+                                 const diff_t N, BIter dst,
+                                 const diff_t dstOffset, const diff_t M,
+                                 ses_t& ses, const EqualTo& equalTo) {
     if (M == 0 && N > 0) {
       for (diff_t i = 0; i < N; ++i) {
         ses.emplace_back(ES_DELETE, srcOffset + i);
       }
-      return;
+      return N;
     }
     if (N == 0 && M > 0) {
       for (diff_t i = 0; i < M; ++i) {
         ses.emplace_back(ES_INSERT, dstOffset + i);
       }
-      return;
+      return M;
     }
     if (N == 0 && M == 0) {
-      return;
+      return 0;
     }
     point_t head, tail;
     diff_t d = findMiddleSnake(src, srcOffset, N, dst, dstOffset, M, head, tail,
                                equalTo);
     if (d == 0) {
+      for (diff_t i = head.first + 1; i <= tail.first; ++i) {
+        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
+      }
+      return 0;
     } else if (d == 1) {
       diff_t xForward = 0, yForward = 0;
       BIter xIter = std::next(src, srcOffset);
@@ -104,19 +109,30 @@ class MyersDiff {
       for (; xForward < N && yForward < M && equalTo(*(xIter++), *(yIter++));) {
         xForward += 1;
         yForward += 1;
+        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, xForward));
       }
       if (xForward == head.first) {
         ses.emplace_back(ES_INSERT, absIndex(dstOffset, head.second));
       } else {
         ses.emplace_back(ES_DELETE, absIndex(srcOffset, head.first));
       }
+      for (diff_t i = head.first + 1; i <= tail.first; ++i) {
+        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
+      }
+      return tail.first - head.first;
     } else {
-      shortestEditScriptImple(src, srcOffset, head.first, dst, dstOffset,
-                              head.second, ses, equalTo);
-      shortestEditScriptImple(
+      diff_t first =
+          shortestEditScriptImple(src, srcOffset, head.first, dst, dstOffset,
+                                  head.second, ses, equalTo);
+      for (diff_t i = head.first + 1; i <= tail.first; ++i) {
+        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
+      }
+      diff_t last = shortestEditScriptImple(
           src, absIndex(srcOffset, tail.first + 1), N - tail.first, dst,
           absIndex(dstOffset, tail.second + 1), M - tail.second, ses, equalTo);
+      return first + last + tail.first - head.first;
     }
+    return 0;
   }
 
   diff_t findMiddleSnake(BIter src, const diff_t srcOffset, const diff_t N,
@@ -126,59 +142,94 @@ class MyersDiff {
     diff_t x, y;
     diff_t kForward, kReverse;
     diff_t delta = N - M;
-    bool odd = ((delta & 1) == 1);
     diff_t ceilHalfD = (N + M + 1) / 2;
     forward.reset(ceilHalfD);
     reverse.reset(ceilHalfD);
     BIter xIter, yIter;
-    for (diff_t d = 0; d <= ceilHalfD; ++d) {
-      for (diff_t k = -d; k <= d; k += 2) {
-        if (k == -d || (k != d && forward[k - 1] < forward[k + 1])) {
-          x = forward[k + 1];
-        } else {
-          x = forward[k - 1] + 1;
-        }
-        y = x - k;
-        last_x = x;
-        last_y = y;
-        xIter = std::next(src, absIndex(srcOffset, x));
-        yIter = std::next(dst, absIndex(dstOffset, y));
-        for (; x < N && y < M && equalTo(*(++xIter), *(++yIter));) {
-          x += 1;
-          y += 1;
-        }
-        forward[k] = x;
-        kReverse = delta - k;
-        if (odd && kReverse >= -(d - 1) && kReverse <= (d - 1)) {
-          if ((N - reverse[kReverse]) <= x) {
-            tail = {x, y};
-            head = {last_x, last_y};
-            return d + (d - 1);
+    bool odd = ((delta & 1) == 1);
+    if (odd) {
+      for (diff_t d = 0; d <= ceilHalfD; ++d) {
+        for (diff_t k = -d; k <= d; k += 2) {
+          if (k == -d || (k != d && forward[k - 1] < forward[k + 1])) {
+            x = forward[k + 1];
+          } else {
+            x = forward[k - 1] + 1;
+          }
+          y = x - k;
+          last_x = x;
+          last_y = y;
+          xIter = std::next(src, absIndex(srcOffset, x));
+          yIter = std::next(dst, absIndex(dstOffset, y));
+          for (; x < N && y < M && equalTo(*(++xIter), *(++yIter));) {
+            x += 1;
+            y += 1;
+          }
+          forward[k] = x;
+          kReverse = delta - k;
+          if (kReverse >= -(d - 1) && kReverse <= (d - 1)) {
+            if ((N - reverse[kReverse]) <= x) {
+              tail = {x, y};
+              head = {last_x, last_y};
+              return d + (d - 1);
+            }
           }
         }
+        for (diff_t k = -d; k <= d; k += 2) {
+          if (k == -d || (k != d && reverse[k - 1] < reverse[k + 1])) {
+            x = reverse[k + 1];
+          } else {
+            x = reverse[k - 1] + 1;
+          }
+          y = x - k;
+          xIter = std::next(src, absIndex(srcOffset, (N - x)));
+          yIter = std::next(dst, absIndex(dstOffset, (M - y)));
+          for (; x < N && y < M && equalTo(*(xIter--), *(yIter--));) {
+            x += 1;
+            y += 1;
+          }
+          reverse[k] = x;
+        }
       }
-      for (diff_t k = -d; k <= d; k += 2) {
-        if (k == -d || (k != d && reverse[k - 1] < reverse[k + 1])) {
-          x = reverse[k + 1];
-        } else {
-          x = reverse[k - 1] + 1;
+    } else {
+      for (diff_t d = 0; d <= ceilHalfD; ++d) {
+        for (diff_t k = -d; k <= d; k += 2) {
+          if (k == -d || (k != d && forward[k - 1] < forward[k + 1])) {
+            x = forward[k + 1];
+          } else {
+            x = forward[k - 1] + 1;
+          }
+          y = x - k;
+          xIter = std::next(src, absIndex(srcOffset, x));
+          yIter = std::next(dst, absIndex(dstOffset, y));
+          for (; x < N && y < M && equalTo(*(++xIter), *(++yIter));) {
+            x += 1;
+            y += 1;
+          }
+          forward[k] = x;
         }
-        y = x - k;
-        last_x = x;
-        last_y = y;
-        xIter = std::next(src, absIndex(srcOffset, (N - x)));
-        yIter = std::next(dst, absIndex(dstOffset, (M - y)));
-        for (; x < N && y < M && equalTo(*(xIter--), *(yIter--));) {
-          x += 1;
-          y += 1;
-        }
-        reverse[k] = x;
-        if (!odd && k >= delta - d && k <= delta + d) {
-          kForward = delta - k;
-          if ((N - x) <= forward[kForward]) {
-            head = {N - x, M - y};
-            tail = {N - last_x, M - last_y};
-            return 2 * d;
+        for (diff_t k = -d; k <= d; k += 2) {
+          if (k == -d || (k != d && reverse[k - 1] < reverse[k + 1])) {
+            x = reverse[k + 1];
+          } else {
+            x = reverse[k - 1] + 1;
+          }
+          y = x - k;
+          last_x = x;
+          last_y = y;
+          xIter = std::next(src, absIndex(srcOffset, (N - x)));
+          yIter = std::next(dst, absIndex(dstOffset, (M - y)));
+          for (; x < N && y < M && equalTo(*(xIter--), *(yIter--));) {
+            x += 1;
+            y += 1;
+          }
+          reverse[k] = x;
+          if (k >= delta - d && k <= delta + d) {
+            kForward = delta - k;
+            if ((N - x) <= forward[kForward]) {
+              head = {N - x, M - y};
+              tail = {N - last_x, M - last_y};
+              return 2 * d;
+            }
           }
         }
       }
