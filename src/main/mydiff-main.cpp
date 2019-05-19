@@ -1,3 +1,7 @@
+// #include <google/profiler.h>
+#ifdef GPERF
+#include <google/profiler.h>
+#endif
 #include <fstream>
 #include "lib/mydiff/myers-diff.h"
 
@@ -16,6 +20,9 @@ bool tv(const std::string &file, std::vector<std::string> &vf) {
 }
 
 int main(int argc, char **argv) {
+#ifdef GPERF
+  ProfilerStart("mydiff.prof");
+#endif
   if (argc != 3) {
     std::cerr << "usage: mydiff orcfile dstfile" << std::endl;
     return 1;
@@ -68,5 +75,8 @@ int main(int argc, char **argv) {
   //   std::cout << src[offset_-1] << "\n";
   // }
   // std::cout << std::flush;
+#ifdef GPERF
+  ProfilerStop();
+#endif
   return 0;
 }

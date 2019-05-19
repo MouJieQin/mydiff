@@ -79,58 +79,63 @@ class MyersDiff {
                                  const diff_t N, BIter dst,
                                  const diff_t dstOffset, const diff_t M,
                                  ses_t& ses, const EqualTo& equalTo) {
-    if (M == 0 && N > 0) {
-      for (diff_t i = 0; i < N; ++i) {
-        ses.emplace_back(ES_DELETE, srcOffset + i);
-      }
-      return N;
-    }
-    if (N == 0 && M > 0) {
-      for (diff_t i = 0; i < M; ++i) {
-        ses.emplace_back(ES_INSERT, dstOffset + i);
-      }
-      return M;
-    }
-    if (N == 0 && M == 0) {
-      return 0;
-    }
-    point_t head, tail;
-    diff_t d = findMiddleSnake(src, srcOffset, N, dst, dstOffset, M, head, tail,
-                               equalTo);
-    if (d == 0) {
-      for (diff_t i = head.first + 1; i <= tail.first; ++i) {
-        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
-      }
-      return 0;
-    } else if (d == 1) {
-      diff_t xForward = 0, yForward = 0;
-      BIter xIter = std::next(src, srcOffset);
-      BIter yIter = std::next(dst, dstOffset);
-      for (; xForward < N && yForward < M && equalTo(*(xIter++), *(yIter++));) {
-        xForward += 1;
-        yForward += 1;
-        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, xForward));
-      }
-      if (xForward == head.first) {
-        ses.emplace_back(ES_INSERT, absIndex(dstOffset, head.second));
+    if (M == 0) {
+      if (N > 0) {
+        for (diff_t i = 0; i < N; ++i) {
+          ses.emplace_back(ES_DELETE, srcOffset + i);
+        }
+        return N;
       } else {
-        ses.emplace_back(ES_DELETE, absIndex(srcOffset, head.first));
+        return 0;
       }
-      for (diff_t i = head.first + 1; i <= tail.first; ++i) {
-        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
-      }
-      return tail.first - head.first;
     } else {
-      diff_t first =
-          shortestEditScriptImple(src, srcOffset, head.first, dst, dstOffset,
-                                  head.second, ses, equalTo);
-      for (diff_t i = head.first + 1; i <= tail.first; ++i) {
-        ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
+      if (N == 0) {
+        for (diff_t i = 0; i < M; ++i) {
+          ses.emplace_back(ES_INSERT, dstOffset + i);
+        }
+        return M;
+      } else {
+        point_t head, tail;
+        diff_t d = findMiddleSnake(src, srcOffset, N, dst, dstOffset, M, head,
+                                   tail, equalTo);
+        if (d == 0) {
+          for (diff_t i = head.first + 1; i <= tail.first; ++i) {
+            ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
+          }
+          return 0;
+        } else if (d == 1) {
+          diff_t xForward = 0, yForward = 0;
+          BIter xIter = std::next(src, srcOffset);
+          BIter yIter = std::next(dst, dstOffset);
+          for (; xForward < N && yForward < M &&
+                 equalTo(*(xIter++), *(yIter++));) {
+            xForward += 1;
+            yForward += 1;
+            ses.emplace_back(ES_RETAIN, absIndex(srcOffset, xForward));
+          }
+          if (xForward == head.first) {
+            ses.emplace_back(ES_INSERT, absIndex(dstOffset, head.second));
+          } else {
+            ses.emplace_back(ES_DELETE, absIndex(srcOffset, head.first));
+          }
+          for (diff_t i = head.first + 1; i <= tail.first; ++i) {
+            ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
+          }
+          return tail.first - head.first;
+        } else {
+          diff_t first =
+              shortestEditScriptImple(src, srcOffset, head.first, dst,
+                                      dstOffset, head.second, ses, equalTo);
+          for (diff_t i = head.first + 1; i <= tail.first; ++i) {
+            ses.emplace_back(ES_RETAIN, absIndex(srcOffset, i));
+          }
+          diff_t last = shortestEditScriptImple(
+              src, absIndex(srcOffset, tail.first + 1), N - tail.first, dst,
+              absIndex(dstOffset, tail.second + 1), M - tail.second, ses,
+              equalTo);
+          return first + last + tail.first - head.first;
+        }
       }
-      diff_t last = shortestEditScriptImple(
-          src, absIndex(srcOffset, tail.first + 1), N - tail.first, dst,
-          absIndex(dstOffset, tail.second + 1), M - tail.second, ses, equalTo);
-      return first + last + tail.first - head.first;
     }
     return 0;
   }
